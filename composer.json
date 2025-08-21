@@ -1,0 +1,15 @@
+{
+    "name": "hp/node-js",
+    "autoload": {
+        "psr-4": {
+            "Hp\\NodeJs\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Arisile",
+            "email": "adesilearisilejoye22@gmail.com"
+        }
+    ],
+    "require": {}
+}
