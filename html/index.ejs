@@ -4,10 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= title %></title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div>
+    <main>
+    <div class="header">
         <b><%- text %></b>
     </div>
+    <aside class="menu">
+        <ul>
+        <% nav.forEach((nav)=>{ %>
+            <li><a href="<%= nav.link %>" ><%= nav.title %></a></li>
+        <% }); %>
+        </ul>
+    </aside>
+    <section class="main">        
+        <div class="chat box">
+        
+        </div>
+        <div class="chat load">
+            <div class="message container">
+
+            </div>
+            <div class="message box">
+                <textarea name="" id="" class="message edit"></textarea>
+            </div>
+        </div>
+    </section>
+    </main>
 </body>
+<script src="chat.js"></script>
 </html>

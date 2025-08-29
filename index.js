@@ -1,5 +1,6 @@
 const http = require("http")//this makes it suitable to be used for a backend system
 const crypto = require("crypto")
+const cookieParser = require("cookie-parser")
 const env = require("dotenv")
 const multer = require("multer")
 env.config();
@@ -13,33 +14,56 @@ const mongoose = require("mongoose")
 const UserRoutes = require("./userRoutes.js")
 const express = require("express")
 const {User, Channel, Message} = require("./models.js")
+const {verifyUserToken} = require("./function.js")
 const html  = fs.readFileSync(path.join(__dirname, "frontend.html"))
 const app   = express()
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "html"));//load up a setting on your app
 
+const setUser = async (req, res, next)=>{
+    const userID = verifyUserToken( req.cookies.userID );
+   // res.send("Middleware working");//blocking midddleware
 
-app.use(function(req, res, next){
-    next()
-});
+    if( userID ){
 
+        const user = await User.findById(userID.userID);
+
+        if( user ){
+            req.user = user;
+        } else {
+            req.user = false;
+        }
+    } else {
+        req.user = false;
+    }
+    //pass to the next middleware or controller
+    next();
+}
+
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.urlencoded());
+app.use(setUser);
 
 //configure multer
 
 const storage = multer.diskStorage({
     destination: "./public/uploads",
     filename: function(req, file, cb){
-        cb(null, Date.now() + file.filename)
+        cb(null, Date.now().toString() + file.originalname )
     }
 });
 
 const uploader = multer({storage})
 
-app.post('/upload', uploader.single("fieldName"))
+app.post('/upload', uploader.single("fieldName"), function(req, res){
+    res.send("File Successfully Uploaded to Server");
+});
+app.get("/upload", async (req, res)=>{
+    res.render("upload");
+});
 
 //controllers 
 app.all('/endpoint', function(req, res){
@@ -50,10 +74,19 @@ app.use(UserRoutes);
 
 
 //test dynamism of ejs template
-app.all('/second/endies', function(req, res){
-    res.render("index", {
+app.all('/', async function(req, res){
+    const user = req.user;
+
+    if(! user ){
+        return res.redirect("/login");
+    }
+    const chats = await user.load_chats();
+    res.render("chat", {
         title: "Second Template",
-        text: "<p>Testing the Dynamism of EJS template</p>"
+        text: "<p>Testing the Dynamism of EJS template</p>",
+        nav : [{title: "Home", link: "/"}, {title: "Shop", link:"/shop"}, {title: "Profile", link: "/profile"}, {title: "Settings", link: "/settings"}],
+        chats: chats,
+        user:user
     });
 });
 
@@ -99,6 +132,8 @@ wss.on("connection", (socket)=>{
     socket.on("message", (message)=>{
 
         console.log("Message recieved from Client is: ", message.toString("utf-8"))
+
+
         
         try {
             //messages must always be formatted in JSON format
@@ -107,6 +142,27 @@ wss.on("connection", (socket)=>{
             if( text.former_user_id && text.former_user_id != text.chat_id ){
                 const currentUser = User.findOne({user_id:text.chat_id});
                 const formerUser = User.findOne({user_id:text.former_user_id});
+            }
+
+            if( text.message == "update_chat_id" ){
+                const allSockets = channels['general'].sockets;
+                const allUsers = channels['general'].users;
+
+                const last_id = text.last_chat_id;
+                const new_id    = text.chat_id;
+
+                allUsers.delete(last_id);
+                allUsers.add(new_id);
+
+                for( const sock in allSockets ){
+                    if(sock.user_id == last_id){
+                        sock.user_id = new_id;
+                    }
+                }
+
+                channels['general'].sockets = allSockets;
+                channels['general'].users   = allUsers;
+                return;
             }
 
             const channel_info = channels[text.channel_id ?? 'general'];//checking if the variable if falsy
@@ -118,7 +174,7 @@ wss.on("connection", (socket)=>{
                     creator_id: text.sender_id
                 }
 
-                if( text.recipient_id && channel_info.users.has(text.recipient_id)){
+                if( text.recipient_id && channel_info. users.has(text.recipient_id)){
                     for( const user of channel_info.sockets ){
                         if( user.user_id == text.recipient_id ){
                            channels[text.channel_id].sockets.add(user);
@@ -168,8 +224,9 @@ wss.on("connection", (socket)=>{
     });
 
     const send_obj = {
-        message: user_id,
-        type: "set_user"
+        message: "set_chat_id",
+        type: "set_user",
+        chat_id: user_id
     };
 
     channels['general'].users.add(user_id);
@@ -178,20 +235,22 @@ wss.on("connection", (socket)=>{
         socket
     };
 
-    User.create({
+    /*User.create({
         user_id,
-    });
+    });*/
     channels['general'].sockets.add(user_socket);
     send_obj.online_users = channels['general'].sockets.size;
 
     socket.send(JSON.stringify(send_obj));
 });
 
-const PORT = 9000;
+const PORT = 9005;
 server.listen(PORT, ()=>{
     console.log(`server started successfully 0n port: ${PORT}`);
 });
 
-app.listen(9001, function(){
-    console.log("express JS server started!");
+const NODE_PORT = 9006
+
+app.listen(NODE_PORT, function(){
+    console.log(`express JS server started! at ${NODE_PORT}`);
 });

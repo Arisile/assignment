@@ -1,30 +1,21 @@
 const mongoose = require("mongoose")
+const bcrypt    = require("bcrypt")
 const {Schema, model}  = mongoose;
 
 const User = new Schema({
     user_id: {
-        type: Schema.Types.String,
+        type: String,
         required:true,
         unique: true,
         lowercase: true,
     },
-      username:{
-       type:String,
-        required:true,
-        unique: true,
-        lowercase:true,
+    username: {
+        type: String,
+        required: true,
+        unique:true,
+        lowercase:true
     },
-    firstname: {
-        type:String,
-        required:true,
-        unique: true,
-    },
-    lastname:{
-        type:String,
-        required:true,
-        unique: true,
-    },
-        phone_number : {
+    phone_number : {
         type:String,
         default:""
     },
@@ -33,10 +24,12 @@ const User = new Schema({
         unique:true,
         required:false
     },
-    password:{
+    password : {
         type:String,
-        required:false
+        required:true
     },
+    first_name : String,
+    last_name: String,
 
     timestamp:Date
 });
@@ -54,7 +47,8 @@ const Channels = new Schema({
     ],
 
     channel_name: String,
-    channel_description:String
+    channel_description:String,
+    channel_icon:String
 });
 const Message = new Schema({
     message_id: {
@@ -82,6 +76,27 @@ const Message = new Schema({
 User.methods.get_id = function(){
     return this.user_id;
 }
+
+User.methods.load_chats = async function(){
+    const id = this._id;
+    const message = model( "Message", Message);
+    const messages = await message.find().populate('sender').exec();
+
+    const user_messages = messages.filter((message)=>{
+       const user = message.sender;
+       return user._id == id;
+    });
+
+    return user_messages;
+}
+
+User.methods.comparePassword = function(password){
+    return bcrypt.compareSync( password, this.password );
+}
+
+User.pre("save", function(){
+     this.password = bcrypt.hashSync(this.password, 10);
+});
 
 User.pre("deleteOne", function(){
     const id = this.get_id();
